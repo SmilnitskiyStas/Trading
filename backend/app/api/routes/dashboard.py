@@ -264,7 +264,7 @@ async def dashboard() -> str:
     }
 
     async function refresh() {
-      const [health, automation, killSwitch, testStatus, account, performance, dailyPerf, symbolPerf, trades, events, btc, eth, btcModels, ethModels, btcMlPredict, btcRisk, ethRisk] = await Promise.all([
+      const [health, automation, killSwitch, testStatus, account, performance, dailyPerf, symbolPerf, trades, events, btc, eth, btcModels, ethModels, btcActiveModel, ethActiveModel, btcMlPredict, btcRisk, ethRisk] = await Promise.all([
         getJson('/health'),
         getJson('/api/v1/automation/status'),
         getJson('/api/v1/automation/kill-switch'),
@@ -287,6 +287,8 @@ async def dashboard() -> str:
         }),
         getJsonSafe('/api/v1/ml/models?symbol=BTC/USDT&timeframe=1h'),
         getJsonSafe('/api/v1/ml/models?symbol=ETH/USDT&timeframe=1h'),
+        getJsonSafe('/api/v1/ml/active-model?symbol=BTC/USDT&timeframe=1h'),
+        getJsonSafe('/api/v1/ml/active-model?symbol=ETH/USDT&timeframe=1h'),
         getJsonSafe('/api/v1/ml/predict', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
@@ -380,7 +382,7 @@ async def dashboard() -> str:
         ['Enabled', 'true', 'ok'],
         ['Symbols', 'BTC/USDT', ''],
         ['Require Model', 'false', ''],
-        ['BTC Model', btcMlModel ? btcMlModel.algorithm : 'not found', btcMlModel ? 'ok' : 'warn-text'],
+        ['BTC Model', btcActiveModel.__error ? 'not found' : btcActiveModel.model_id, btcActiveModel.__error ? 'warn-text' : 'ok'],
       ]);
 
       qs('btcMlRiskCheck').innerHTML = metricCard([
@@ -439,8 +441,11 @@ async def dashboard() -> str:
 
       qs('btcMl').innerHTML = listCard([
         btcMlModel
-          ? `<strong>Model</strong>: ${btcMlModel.model_id}<br><strong>Algorithm</strong>: ${btcMlModel.algorithm}<br><strong>Trained</strong>: ${btcMlModel.trained_at}<br><strong>Rows</strong>: ${btcMlModel.dataset_rows}<br><strong>Threshold</strong>: ${btcMlModel.confidence_threshold}`
+          ? `<strong>Model</strong>: ${btcMlModel.model_id}<br><strong>Algorithm</strong>: ${btcMlModel.algorithm}<br><strong>Trained</strong>: ${btcMlModel.trained_at}<br><strong>Rows</strong>: ${btcMlModel.dataset_rows}<br><strong>Threshold</strong>: ${btcMlModel.confidence_threshold}<br><strong>Review</strong>: ${btcMlModel.review_status}<br><strong>Selection</strong>: ${btcMlModel.selection_mode}${btcMlModel.review_notes ? `<br><strong>Notes</strong>: ${btcMlModel.review_notes}` : ''}${btcMlModel.source_bundle_label ? `<br><strong>Source Bundle</strong>: ${btcMlModel.source_bundle_label}` : ''}${btcMlModel.train_period_start ? `<br><strong>Train Window</strong>: ${btcMlModel.train_period_start} -> ${btcMlModel.train_period_end}` : ''}`
           : `<strong>Model</strong>: not found<br><span class="muted">Train BTC 1h model to enable ML assistance.</span>`,
+        !btcActiveModel.__error
+          ? `<strong>Active Runtime Model</strong>: ${btcActiveModel.model_id}<br><strong>Mode</strong>: ${btcActiveModel.selection_mode}<br><strong>Review</strong>: ${btcActiveModel.review_status}${btcActiveModel.review_notes ? `<br><strong>Review Notes</strong>: ${btcActiveModel.review_notes}` : ''}`
+          : `<strong>Active Runtime Model</strong>: unavailable<br><span class="muted">${btcActiveModel.__error}</span>`,
         btcMlPredictionOk
           ? `<strong>Advisory</strong>: ${btcMlPredict.advisory_signal}<br><strong>Probability Up</strong>: ${Number(btcMlPredict.probability_up).toFixed(3)}<br><strong>Confidence</strong>: ${Number(btcMlPredict.confidence).toFixed(3)}<br><strong>Passes Threshold</strong>: ${String(btcMlPredict.passes_confidence_threshold)}`
           : `<strong>Prediction</strong>: unavailable<br><span class="muted">${btcMlPredict.__error}</span>`,
@@ -448,8 +453,11 @@ async def dashboard() -> str:
 
       qs('ethMl').innerHTML = listCard([
         ethMlModel
-          ? `<strong>Model</strong>: ${ethMlModel.model_id}<br><strong>Algorithm</strong>: ${ethMlModel.algorithm}<br><strong>Trained</strong>: ${ethMlModel.trained_at}<br><strong>Rows</strong>: ${ethMlModel.dataset_rows}<br><strong>Threshold</strong>: ${ethMlModel.confidence_threshold}`
+          ? `<strong>Model</strong>: ${ethMlModel.model_id}<br><strong>Algorithm</strong>: ${ethMlModel.algorithm}<br><strong>Trained</strong>: ${ethMlModel.trained_at}<br><strong>Rows</strong>: ${ethMlModel.dataset_rows}<br><strong>Threshold</strong>: ${ethMlModel.confidence_threshold}<br><strong>Review</strong>: ${ethMlModel.review_status}<br><strong>Selection</strong>: ${ethMlModel.selection_mode}${ethMlModel.review_notes ? `<br><strong>Notes</strong>: ${ethMlModel.review_notes}` : ''}${ethMlModel.source_bundle_label ? `<br><strong>Source Bundle</strong>: ${ethMlModel.source_bundle_label}` : ''}${ethMlModel.train_period_start ? `<br><strong>Train Window</strong>: ${ethMlModel.train_period_start} -> ${ethMlModel.train_period_end}` : ''}`
           : `<strong>Model</strong>: none active<br><span class="muted">ETH is currently outside the ML risk gate allowlist.</span>`,
+        !ethActiveModel.__error
+          ? `<strong>Active Runtime Model</strong>: ${ethActiveModel.model_id}<br><strong>Mode</strong>: ${ethActiveModel.selection_mode}<br><strong>Review</strong>: ${ethActiveModel.review_status}${ethActiveModel.review_notes ? `<br><strong>Review Notes</strong>: ${ethActiveModel.review_notes}` : ''}`
+          : `<strong>Active Runtime Model</strong>: unavailable<br><span class="muted">${ethActiveModel.__error || 'ETH runtime model is not pinned and no latest model is available.'}</span>`,
         `<strong>ML Gate</strong>: disabled for ETH/USDT<br><span class="muted">Strategy and risk still run normally without ML confirmation.</span>`,
       ]);
 

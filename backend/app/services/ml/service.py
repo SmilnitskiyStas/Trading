@@ -11,8 +11,12 @@ from sklearn.preprocessing import StandardScaler
 from app.core.config import get_settings
 from app.schemas.ml import (
     MLAdvisorySignal,
+    MLActiveModelResponse,
+    MLModelDetailResponse,
+    MLModelReviewRequest,
     MLMetricsSummary,
     MLModelSummary,
+    MLPinModelRequest,
     MLPredictRequest,
     MLPredictResponse,
     MLDatasetSplitSummary,
@@ -94,6 +98,8 @@ class MLService:
         MLDatasetBuilder.export_csv(dataset_path, dataset)
 
         confidence_threshold = payload.confidence_threshold or self.settings.ml_default_confidence_threshold
+        train_period_start = dataset.rows[0].open_time if dataset.rows else None
+        train_period_end = dataset.rows[-1].close_time if dataset.rows else None
         metadata = {
             "model_id": model_id,
             "exchange": payload.exchange,
@@ -104,8 +110,11 @@ class MLService:
             "min_edge_percent": payload.min_edge_percent,
             "min_precision": min_precision,
             "min_positive_predictions": min_positive_predictions,
+            "source_bundle_label": payload.source_bundle_label,
             "algorithm": algorithm_name,
             "trained_at": datetime.now(tz=UTC).isoformat(),
+            "train_period_start": train_period_start.isoformat() if train_period_start else None,
+            "train_period_end": train_period_end.isoformat() if train_period_end else None,
             "dataset_rows": len(dataset.rows),
             "feature_count": len(dataset.feature_names),
             "feature_names": dataset.feature_names,
@@ -118,6 +127,9 @@ class MLService:
             "test_metrics": test_metrics.model_dump(),
             "decision_threshold": decision_threshold,
             "confidence_threshold": confidence_threshold,
+            "review_status": "unreviewed",
+            "review_notes": None,
+            "review_updated_at": None,
             "dataset_path": str(dataset_path),
             "artifact_path": str(artifact_path),
             "metadata_path": str(metadata_path),
@@ -134,8 +146,11 @@ class MLService:
             min_edge_percent=payload.min_edge_percent,
             min_precision=min_precision,
             min_positive_predictions=min_positive_predictions,
+            source_bundle_label=payload.source_bundle_label,
             algorithm=algorithm_name,
             trained_at=datetime.fromisoformat(metadata["trained_at"]),
+            train_period_start=train_period_start,
+            train_period_end=train_period_end,
             dataset_rows=len(dataset.rows),
             feature_count=len(dataset.feature_names),
             feature_names=dataset.feature_names,
@@ -352,6 +367,9 @@ class MLService:
         timeframe: str | None = None,
     ) -> list[MLModelSummary]:
         models = self.registry.list_models(symbol=symbol, timeframe=timeframe)
+        pinned_model_id = None
+        if symbol and timeframe:
+            pinned_model_id = self.registry.get_pinned_model_id(symbol=symbol, timeframe=timeframe)
         return [
             MLModelSummary(
                 model_id=model["model_id"],
@@ -367,12 +385,192 @@ class MLService:
                 ),
                 algorithm=model["algorithm"],
                 trained_at=datetime.fromisoformat(model["trained_at"]),
+                train_period_start=(
+                    datetime.fromisoformat(model["train_period_start"])
+                    if model.get("train_period_start")
+                    else None
+                ),
+                train_period_end=(
+                    datetime.fromisoformat(model["train_period_end"])
+                    if model.get("train_period_end")
+                    else None
+                ),
                 dataset_rows=model["dataset_rows"],
                 decision_threshold=float(model.get("decision_threshold", 0.5)),
                 confidence_threshold=float(model["confidence_threshold"]),
+                active=(
+                    model["model_id"] == pinned_model_id
+                    if pinned_model_id
+                    else model["model_id"] == models[0]["model_id"]
+                ),
+                selection_mode=(
+                    "pinned"
+                    if pinned_model_id and model["model_id"] == pinned_model_id
+                    else "latest"
+                ),
+                source_bundle_label=model.get("source_bundle_label"),
+                review_status=model.get("review_status", "unreviewed"),
+                review_notes=model.get("review_notes"),
+                review_updated_at=(
+                    datetime.fromisoformat(model["review_updated_at"])
+                    if model.get("review_updated_at")
+                    else None
+                ),
             )
             for model in models
         ]
+
+    def get_active_model(self, symbol: str, timeframe: str) -> MLActiveModelResponse:
+        try:
+            resolved = self.registry.resolve_active_model(symbol=symbol, timeframe=timeframe)
+        except FileNotFoundError as exc:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail=str(exc),
+            ) from exc
+        metadata = resolved["metadata"]
+        return MLActiveModelResponse(
+            model_id=resolved["model_id"],
+            symbol=symbol,
+            timeframe=timeframe,
+            selection_mode=resolved["selection_mode"],
+            algorithm=metadata["algorithm"],
+            trained_at=datetime.fromisoformat(metadata["trained_at"]),
+            train_period_start=(
+                datetime.fromisoformat(metadata["train_period_start"])
+                if metadata.get("train_period_start")
+                else None
+            ),
+            train_period_end=(
+                datetime.fromisoformat(metadata["train_period_end"])
+                if metadata.get("train_period_end")
+                else None
+            ),
+            dataset_rows=metadata["dataset_rows"],
+            confidence_threshold=float(metadata["confidence_threshold"]),
+            decision_threshold=float(metadata.get("decision_threshold", 0.5)),
+            review_status=metadata.get("review_status", "unreviewed"),
+            review_notes=metadata.get("review_notes"),
+            review_updated_at=(
+                datetime.fromisoformat(metadata["review_updated_at"])
+                if metadata.get("review_updated_at")
+                else None
+            ),
+        )
+
+    def pin_model(self, payload: MLPinModelRequest) -> MLActiveModelResponse:
+        try:
+            resolved = self.registry.pin_model(
+                symbol=payload.symbol,
+                timeframe=payload.timeframe,
+                model_id=payload.model_id,
+            )
+        except FileNotFoundError as exc:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail=str(exc),
+            ) from exc
+        except ValueError as exc:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=str(exc),
+            ) from exc
+        metadata = self.registry.load_metadata(payload.model_id)
+        return MLActiveModelResponse(
+            model_id=resolved["model_id"],
+            symbol=resolved["symbol"],
+            timeframe=resolved["timeframe"],
+            selection_mode=resolved["selection_mode"],
+            algorithm=metadata["algorithm"],
+            trained_at=datetime.fromisoformat(metadata["trained_at"]),
+            train_period_start=(
+                datetime.fromisoformat(metadata["train_period_start"])
+                if metadata.get("train_period_start")
+                else None
+            ),
+            train_period_end=(
+                datetime.fromisoformat(metadata["train_period_end"])
+                if metadata.get("train_period_end")
+                else None
+            ),
+            dataset_rows=metadata["dataset_rows"],
+            confidence_threshold=float(metadata["confidence_threshold"]),
+            decision_threshold=float(metadata.get("decision_threshold", 0.5)),
+            review_status=metadata.get("review_status", "unreviewed"),
+            review_notes=metadata.get("review_notes"),
+            review_updated_at=(
+                datetime.fromisoformat(metadata["review_updated_at"])
+                if metadata.get("review_updated_at")
+                else None
+            ),
+        )
+
+    def unpin_model(self, symbol: str, timeframe: str) -> MLActiveModelResponse:
+        self.registry.unpin_model(symbol=symbol, timeframe=timeframe)
+        return self.get_active_model(symbol=symbol, timeframe=timeframe)
+
+    def get_model_detail(self, model_id: str) -> MLModelDetailResponse:
+        try:
+            metadata = self.registry.load_metadata(model_id)
+        except FileNotFoundError as exc:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail=str(exc),
+            ) from exc
+        return MLModelDetailResponse(
+            model_id=metadata["model_id"],
+            exchange=metadata["exchange"],
+            symbol=metadata["symbol"],
+            timeframe=metadata["timeframe"],
+            target=MLTarget(metadata["target"]),
+            algorithm=metadata["algorithm"],
+            trained_at=datetime.fromisoformat(metadata["trained_at"]),
+            dataset_rows=metadata["dataset_rows"],
+            feature_count=metadata.get("feature_count"),
+            forecast_horizon_candles=metadata.get("forecast_horizon_candles"),
+            min_edge_percent=metadata.get("min_edge_percent"),
+            min_precision=metadata.get("min_precision"),
+            min_positive_predictions=metadata.get("min_positive_predictions"),
+            source_bundle_label=metadata.get("source_bundle_label"),
+            train_period_start=(
+                datetime.fromisoformat(metadata["train_period_start"])
+                if metadata.get("train_period_start")
+                else None
+            ),
+            train_period_end=(
+                datetime.fromisoformat(metadata["train_period_end"])
+                if metadata.get("train_period_end")
+                else None
+            ),
+            decision_threshold=metadata.get("decision_threshold"),
+            confidence_threshold=metadata.get("confidence_threshold"),
+            validation_metrics=metadata.get("validation_metrics"),
+            test_metrics=metadata.get("test_metrics"),
+            review_status=metadata.get("review_status", "unreviewed"),
+            review_notes=metadata.get("review_notes"),
+            review_updated_at=(
+                datetime.fromisoformat(metadata["review_updated_at"])
+                if metadata.get("review_updated_at")
+                else None
+            ),
+        )
+
+    def review_model(self, payload: MLModelReviewRequest) -> MLModelDetailResponse:
+        try:
+            metadata = self.registry.update_metadata(
+                payload.model_id,
+                {
+                    "review_status": payload.review_status,
+                    "review_notes": payload.review_notes,
+                    "review_updated_at": datetime.now(tz=UTC).isoformat(),
+                },
+            )
+        except FileNotFoundError as exc:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail=str(exc),
+            ) from exc
+        return self.get_model_detail(metadata["model_id"])
 
     @staticmethod
     def resolve_advisory_signal(

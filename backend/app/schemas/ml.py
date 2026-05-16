@@ -40,6 +40,7 @@ class MLTrainRequest(BaseModel):
     min_edge_percent: float = Field(default=0.4, ge=0.05, le=5.0)
     min_precision: float | None = Field(default=None, ge=0.05, le=0.99)
     min_positive_predictions: int | None = Field(default=None, ge=1, le=1000)
+    source_bundle_label: str | None = Field(default=None, max_length=200)
     confidence_threshold: float | None = Field(default=None, ge=0.5, le=0.99)
 
 
@@ -53,8 +54,11 @@ class MLTrainResponse(BaseModel):
     min_edge_percent: float
     min_precision: float
     min_positive_predictions: int
+    source_bundle_label: str | None = None
     algorithm: str
     trained_at: datetime = Field(default_factory=lambda: datetime.now(tz=UTC))
+    train_period_start: datetime | None = None
+    train_period_end: datetime | None = None
     dataset_rows: int
     feature_count: int
     feature_names: list[str]
@@ -113,11 +117,74 @@ class MLModelSummary(BaseModel):
     min_edge_percent: float
     min_precision: float
     min_positive_predictions: int
+    source_bundle_label: str | None = None
     algorithm: str
     trained_at: datetime
+    train_period_start: datetime | None = None
+    train_period_end: datetime | None = None
     dataset_rows: int
     decision_threshold: float
     confidence_threshold: float
+    active: bool = False
+    selection_mode: str = "latest"
+    review_status: str = "unreviewed"
+    review_notes: str | None = None
+    review_updated_at: datetime | None = None
+
+
+class MLPinModelRequest(BaseModel):
+    symbol: str = Field(default="BTC/USDT")
+    timeframe: str = Field(default="1h")
+    model_id: str
+
+
+class MLActiveModelResponse(BaseModel):
+    model_id: str
+    symbol: str
+    timeframe: str
+    selection_mode: str
+    algorithm: str
+    trained_at: datetime
+    train_period_start: datetime | None = None
+    train_period_end: datetime | None = None
+    dataset_rows: int
+    confidence_threshold: float
+    decision_threshold: float
+    review_status: str = "unreviewed"
+    review_notes: str | None = None
+    review_updated_at: datetime | None = None
+
+
+class MLModelReviewRequest(BaseModel):
+    model_id: str
+    review_status: str = Field(default="candidate", max_length=50)
+    review_notes: str | None = Field(default=None, max_length=2000)
+
+
+class MLModelDetailResponse(BaseModel):
+    model_id: str
+    exchange: str
+    symbol: str
+    timeframe: str
+    target: MLTarget
+    algorithm: str
+    trained_at: datetime
+    dataset_rows: int
+    feature_count: int | None = None
+    forecast_horizon_candles: int | None = None
+    min_edge_percent: float | None = None
+    min_precision: float | None = None
+    min_positive_predictions: int | None = None
+    source_bundle_label: str | None = None
+    train_period_start: datetime | None = None
+    train_period_end: datetime | None = None
+    decision_threshold: float | None = None
+    confidence_threshold: float | None = None
+    validation_metrics: dict | None = None
+    test_metrics: dict | None = None
+    review_status: str = "unreviewed"
+    review_notes: str | None = None
+    review_updated_at: datetime | None = None
 
 
 class MLWalkForwardRequest(BaseModel):

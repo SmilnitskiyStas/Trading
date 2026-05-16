@@ -5,6 +5,7 @@ from fastapi import FastAPI
 from app.api.routes.automation import router as automation_router
 from app.api.routes.backtesting import router as backtesting_router
 from app.api.routes.dashboard import router as dashboard_router
+from app.api.routes.exports import router as exports_router
 from app.api.routes.health import router as health_router
 from app.api.routes.indicators import router as indicators_router
 from app.api.routes.market_data import router as market_data_router
@@ -36,6 +37,7 @@ app = FastAPI(
 )
 app.include_router(health_router)
 app.include_router(dashboard_router)
+app.include_router(exports_router)
 app.include_router(automation_router)
 app.include_router(backtesting_router)
 app.include_router(indicators_router)

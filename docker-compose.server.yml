@@ -44,6 +44,9 @@ services:
         condition: service_healthy
     ports:
       - "${BACKEND_PORT:-8000}:8000"
+    volumes:
+      - ml_models_data:/app/ml/models
+      - ml_datasets_data:/app/ml/datasets
     command: >
       sh -c "alembic upgrade head &&
       uvicorn app.main:app
@@ -53,3 +56,5 @@ services:
 volumes:
   postgres_data:
   redis_data:
+  ml_models_data:
+  ml_datasets_data:

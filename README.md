@@ -59,6 +59,7 @@ Why:
 - no bind-mount of the source code into the container
 - PostgreSQL and Redis stay private inside Docker
 - Alembic migrations run automatically before backend startup
+- trained ML artifacts are stored in Docker volumes and survive backend rebuilds
 
 Recommended deployment flow:
 
@@ -96,6 +97,7 @@ Notes:
 - On a public server, open only port `8000` in the firewall if you plan to access the dashboard directly.
 - Do not expose PostgreSQL or Redis to the internet.
 - For a cleaner public setup, put Nginx or Caddy in front later and serve the app through a domain and HTTPS.
+- Server ML storage now lives in Docker volumes mounted to `/app/ml/models` and `/app/ml/datasets`.
 
 ## Automation
 
@@ -172,6 +174,42 @@ Useful endpoints:
 - `POST /api/v1/ml/walk-forward`
 - `POST /api/v1/ml/predict`
 - `GET /api/v1/ml/models`
+- `GET /api/v1/ml/active-model?symbol=BTC/USDT&timeframe=1h`
+- `GET /api/v1/ml/model-detail?model_id=btc_usdt_1h_20260516T120000Z`
+- `POST /api/v1/ml/pin-model`
+- `POST /api/v1/ml/unpin-model?symbol=BTC/USDT&timeframe=1h`
+- `POST /api/v1/ml/review-model`
+
+## Data Export
+
+While the server is collecting runtime data, you can now export it directly for local analysis and retraining.
+
+Useful endpoints:
+
+- `GET /api/v1/exports/manifest`
+- `GET /api/v1/exports/candles.csv?exchange=binance&symbol=BTC/USDT&timeframe=1h&limit=3000`
+- `GET /api/v1/exports/paper-trades.csv?account_name=paper-main&limit=5000`
+- `GET /api/v1/exports/events.csv?limit=5000`
+- `GET /api/v1/exports/daily-reports.csv?account_name=paper-main&limit=365`
+- `GET /api/v1/exports/ml-dataset.csv?exchange=binance&symbol=BTC/USDT&timeframe=1h&limit=3000&target=future_edge_long&forecast_horizon_candles=3&min_edge_percent=0.4`
+
+Practical use:
+
+- export raw candles when you want to rebuild research datasets locally
+- export `ml-dataset.csv` when you want the server to produce the feature snapshot for local training
+- export paper trades, events, and daily reports to compare model versions against live paper behavior
+
+Helper scripts:
+
+- [backend/scripts/fetch_runtime_exports.py](C:/Users/stass/source/Trading/backend/scripts/fetch_runtime_exports.py)
+- [backend/scripts/manage_remote_model_pin.py](C:/Users/stass/source/Trading/backend/scripts/manage_remote_model_pin.py)
+- [docs/server_ml_workflow.md](C:/Users/stass/source/Trading/docs/server_ml_workflow.md)
+
+Backup and restore:
+
+- [ops/server_backup.sh](C:/Users/stass/source/Trading/ops/server_backup.sh)
+- [ops/server_restore.sh](C:/Users/stass/source/Trading/ops/server_restore.sh)
+- [docs/server_backup_restore.md](C:/Users/stass/source/Trading/docs/server_backup_restore.md)
 
 Optional ML risk gate:
 
@@ -179,6 +217,16 @@ Optional ML risk gate:
 - if the ML advisory is not `UP` with sufficient confidence, the entry is blocked before paper execution
 - if `ML_RISK_FILTER_REQUIRE_MODEL=true`, missing ML models also block new entries
 - `POST /api/v1/risk/evaluate` now includes `ml_filter` details in the response when the ML gate is enabled
+
+Model deployment workflow:
+
+- train locally
+- copy `.joblib` and `.json` artifacts to the server ML storage
+- use `GET /api/v1/ml/models` to confirm the model is visible
+- use `GET /api/v1/ml/model-detail` to inspect full metadata for one model
+- use `POST /api/v1/ml/review-model` to attach a verdict and notes
+- use `POST /api/v1/ml/pin-model` to make one exact model active for a symbol and timeframe
+- use `POST /api/v1/ml/unpin-model` to fall back to the latest available model again
 
 ## Safety Controls
 
