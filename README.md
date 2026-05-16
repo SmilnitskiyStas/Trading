@@ -176,6 +176,7 @@ Useful endpoints:
 - `GET /api/v1/ml/models`
 - `GET /api/v1/ml/active-model?symbol=BTC/USDT&timeframe=1h`
 - `GET /api/v1/ml/model-detail?model_id=btc_usdt_1h_20260516T120000Z`
+- `GET /api/v1/ml/evaluation-checklist?model_id=btc_usdt_1h_20260516T120000Z&account_name=paper-main`
 - `POST /api/v1/ml/pin-model`
 - `POST /api/v1/ml/unpin-model?symbol=BTC/USDT&timeframe=1h`
 - `POST /api/v1/ml/review-model`
@@ -224,6 +225,7 @@ Model deployment workflow:
 - copy `.joblib` and `.json` artifacts to the server ML storage
 - use `GET /api/v1/ml/models` to confirm the model is visible
 - use `GET /api/v1/ml/model-detail` to inspect full metadata for one model
+- use `GET /api/v1/ml/evaluation-checklist` to compare one model against paper-trading acceptance thresholds
 - use `POST /api/v1/ml/review-model` to attach a verdict and notes
 - use `POST /api/v1/ml/pin-model` to make one exact model active for a symbol and timeframe
 - use `POST /api/v1/ml/unpin-model` to fall back to the latest available model again

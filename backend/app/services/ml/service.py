@@ -12,6 +12,8 @@ from app.core.config import get_settings
 from app.schemas.ml import (
     MLAdvisorySignal,
     MLActiveModelResponse,
+    MLChecklistCriterion,
+    MLEvaluationChecklistResponse,
     MLModelDetailResponse,
     MLModelReviewRequest,
     MLMetricsSummary,
@@ -571,6 +573,75 @@ class MLService:
                 detail=str(exc),
             ) from exc
         return self.get_model_detail(metadata["model_id"])
+
+    def build_evaluation_checklist(
+        self,
+        model_detail: MLModelDetailResponse,
+        account_name: str,
+        closed_trades: int,
+        profit_factor: float,
+        max_drawdown_percent: float,
+    ) -> MLEvaluationChecklistResponse:
+        allowed_review_statuses = self.settings.ml_eval_allowed_review_status_list
+        test_precision = (
+            float(model_detail.test_metrics.get("precision", 0.0))
+            if model_detail.test_metrics
+            else 0.0
+        )
+
+        criteria = [
+            MLChecklistCriterion(
+                name="review_status",
+                passed=model_detail.review_status in allowed_review_statuses,
+                actual=model_detail.review_status,
+                expected=", ".join(allowed_review_statuses),
+                details="Model should have an explicit review verdict before promotion.",
+            ),
+            MLChecklistCriterion(
+                name="closed_trades",
+                passed=closed_trades >= self.settings.ml_eval_min_closed_trades,
+                actual=str(closed_trades),
+                expected=f">= {self.settings.ml_eval_min_closed_trades}",
+                details="Need enough paper-trading history before trusting the runtime setup.",
+            ),
+            MLChecklistCriterion(
+                name="profit_factor",
+                passed=profit_factor >= self.settings.ml_eval_min_profit_factor,
+                actual=f"{profit_factor:.3f}",
+                expected=f">= {self.settings.ml_eval_min_profit_factor:.3f}",
+                details="Paper performance should stay above the minimum profitability floor.",
+            ),
+            MLChecklistCriterion(
+                name="max_drawdown_percent",
+                passed=max_drawdown_percent <= self.settings.ml_eval_max_drawdown_percent,
+                actual=f"{max_drawdown_percent:.3f}",
+                expected=f"<= {self.settings.ml_eval_max_drawdown_percent:.3f}",
+                details="Drawdown should remain within the acceptable paper-trading risk window.",
+            ),
+            MLChecklistCriterion(
+                name="test_precision",
+                passed=test_precision >= self.settings.ml_eval_min_test_precision,
+                actual=f"{test_precision:.3f}",
+                expected=f">= {self.settings.ml_eval_min_test_precision:.3f}",
+                details="ML precision should clear the minimum threshold for entry filtering.",
+            ),
+        ]
+
+        overall_passed = all(item.passed for item in criteria)
+        recommendation = (
+            "READY_FOR_PAPER_GATE"
+            if overall_passed
+            else "KEEP_IN_RESEARCH_OR_COLLECT_MORE_DATA"
+        )
+        return MLEvaluationChecklistResponse(
+            model_id=model_detail.model_id,
+            symbol=model_detail.symbol,
+            timeframe=model_detail.timeframe,
+            account_name=account_name,
+            overall_passed=overall_passed,
+            recommendation=recommendation,
+            criteria=criteria,
+        )
 
     @staticmethod
     def resolve_advisory_signal(

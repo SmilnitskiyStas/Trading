@@ -106,6 +106,14 @@ class Settings(BaseSettings):
         alias="ML_RISK_FILTER_CONFIDENCE_THRESHOLD",
     )
     ml_risk_filter_symbols: str = Field(default="BTC/USDT", alias="ML_RISK_FILTER_SYMBOLS")
+    ml_eval_min_closed_trades: int = Field(default=5, alias="ML_EVAL_MIN_CLOSED_TRADES")
+    ml_eval_min_profit_factor: float = Field(default=1.05, alias="ML_EVAL_MIN_PROFIT_FACTOR")
+    ml_eval_max_drawdown_percent: float = Field(default=12.0, alias="ML_EVAL_MAX_DRAWDOWN_PERCENT")
+    ml_eval_min_test_precision: float = Field(default=0.35, alias="ML_EVAL_MIN_TEST_PRECISION")
+    ml_eval_allowed_review_statuses: str = Field(
+        default="approved_for_paper_gate,approved",
+        alias="ML_EVAL_ALLOWED_REVIEW_STATUSES",
+    )
 
     @property
     def market_data_symbol_list(self) -> list[str]:
@@ -136,6 +144,10 @@ class Settings(BaseSettings):
     @property
     def ml_risk_filter_symbol_list(self) -> list[str]:
         return [symbol.strip() for symbol in self.ml_risk_filter_symbols.split(",") if symbol.strip()]
+
+    @property
+    def ml_eval_allowed_review_status_list(self) -> list[str]:
+        return [status.strip() for status in self.ml_eval_allowed_review_statuses.split(",") if status.strip()]
 
 
 @lru_cache

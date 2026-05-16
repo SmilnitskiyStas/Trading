@@ -193,6 +193,8 @@ async def dashboard() -> str:
       <article class="card third"><h2>ETH Risk Check</h2><div id="ethMlRiskCheck" class="metric"></div></article>
       <article class="card half"><h2>BTC ML Model</h2><div id="btcMl" class="list"></div></article>
       <article class="card half"><h2>ETH ML Model</h2><div id="ethMl" class="list"></div></article>
+      <article class="card half"><h2>BTC ML Checklist</h2><div id="btcMlChecklist" class="list"></div></article>
+      <article class="card half"><h2>ETH ML Checklist</h2><div id="ethMlChecklist" class="list"></div></article>
 
       <article class="card quarter"><h2>Account</h2><div id="account" class="metric"></div></article>
       <article class="card quarter"><h2>Return</h2><div id="perfReturn" class="metric"></div></article>
@@ -377,6 +379,13 @@ async def dashboard() -> str:
       const btcMlModel = Array.isArray(btcModels) && btcModels.length ? btcModels[0] : null;
       const ethMlModel = Array.isArray(ethModels) && ethModels.length ? ethModels[0] : null;
       const btcMlPredictionOk = !btcMlPredict.__error;
+      const btcChecklistPromise = !btcActiveModel.__error
+        ? getJsonSafe(`/api/v1/ml/evaluation-checklist?model_id=${encodeURIComponent(btcActiveModel.model_id)}&account_name=paper-main`)
+        : Promise.resolve({ __error: 'No active BTC runtime model available for evaluation checklist.' });
+      const ethChecklistPromise = !ethActiveModel.__error
+        ? getJsonSafe(`/api/v1/ml/evaluation-checklist?model_id=${encodeURIComponent(ethActiveModel.model_id)}&account_name=paper-main`)
+        : Promise.resolve({ __error: 'No active ETH runtime model available for evaluation checklist.' });
+      const [btcChecklist, ethChecklist] = await Promise.all([btcChecklistPromise, ethChecklistPromise]);
 
       qs('mlGate').innerHTML = metricCard([
         ['Enabled', 'true', 'ok'],
@@ -460,6 +469,34 @@ async def dashboard() -> str:
           : `<strong>Active Runtime Model</strong>: unavailable<br><span class="muted">${ethActiveModel.__error || 'ETH runtime model is not pinned and no latest model is available.'}</span>`,
         `<strong>ML Gate</strong>: disabled for ETH/USDT<br><span class="muted">Strategy and risk still run normally without ML confirmation.</span>`,
       ]);
+
+      qs('btcMlChecklist').innerHTML = !btcChecklist.__error
+        ? listCard([
+            `<strong>Recommendation</strong>: ${btcChecklist.recommendation}<br><strong>Overall Passed</strong>: ${String(btcChecklist.overall_passed)}`,
+            ...btcChecklist.criteria.map((item) => `
+              <strong>${item.name}</strong>: ${item.passed ? 'PASS' : 'FAIL'}<br>
+              Actual: ${item.actual}<br>
+              Expected: ${item.expected}<br>
+              ${item.details || ''}
+            `),
+          ])
+        : listCard([
+            `<strong>Checklist</strong>: unavailable<br><span class="muted">${btcChecklist.__error}</span>`,
+          ]);
+
+      qs('ethMlChecklist').innerHTML = !ethChecklist.__error
+        ? listCard([
+            `<strong>Recommendation</strong>: ${ethChecklist.recommendation}<br><strong>Overall Passed</strong>: ${String(ethChecklist.overall_passed)}`,
+            ...ethChecklist.criteria.map((item) => `
+              <strong>${item.name}</strong>: ${item.passed ? 'PASS' : 'FAIL'}<br>
+              Actual: ${item.actual}<br>
+              Expected: ${item.expected}<br>
+              ${item.details || ''}
+            `),
+          ])
+        : listCard([
+            `<strong>Checklist</strong>: unavailable<br><span class="muted">${ethChecklist.__error}</span>`,
+          ]);
 
       qs('symbolPerf').innerHTML = listCard(
         symbolPerf.map((row) => `

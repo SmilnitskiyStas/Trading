@@ -43,3 +43,21 @@ def test_resolve_test_status_reports_profitable_when_sample_is_large_enough():
     assert pnl_status == "PROFITABLE"
     assert ready is True
     assert "positive realized result" in summary.lower()
+
+
+def test_max_drawdown_percent_tracks_peak_to_trough_path():
+    class Trade:
+        def __init__(self, pnl, closed_order):
+            self.realized_pnl = Decimal(pnl)
+            self.closed_at = closed_order
+
+    trades = [
+        Trade("100", 1),
+        Trade("-50", 2),
+        Trade("-100", 3),
+        Trade("80", 4),
+    ]
+
+    result = PaperTradingService._max_drawdown_percent(Decimal("1000"), trades)
+
+    assert result == Decimal("13.63636363636363636363636364")

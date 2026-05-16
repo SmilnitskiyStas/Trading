@@ -1,8 +1,10 @@
 from fastapi import APIRouter, Depends, Query
 
 from app.api.routes.indicators import get_indicator_service
+from app.api.routes.paper_trading import get_paper_trading_service
 from app.schemas.ml import (
     MLActiveModelResponse,
+    MLEvaluationChecklistResponse,
     MLModelDetailResponse,
     MLModelReviewRequest,
     MLModelSummary,
@@ -16,6 +18,7 @@ from app.schemas.ml import (
 )
 from app.services.indicators.service import IndicatorService
 from app.services.ml.service import MLService
+from app.services.execution.paper_trading import PaperTradingService
 
 router = APIRouter(prefix="/api/v1", tags=["ml"])
 
@@ -99,3 +102,21 @@ async def review_model(
     ml_service: MLService = Depends(get_ml_service),
 ) -> MLModelDetailResponse:
     return ml_service.review_model(payload)
+
+
+@router.get("/ml/evaluation-checklist", response_model=MLEvaluationChecklistResponse)
+async def get_evaluation_checklist(
+    model_id: str = Query(...),
+    account_name: str = Query(default="paper-main"),
+    ml_service: MLService = Depends(get_ml_service),
+    paper_trading_service: PaperTradingService = Depends(get_paper_trading_service),
+) -> MLEvaluationChecklistResponse:
+    model_detail = ml_service.get_model_detail(model_id=model_id)
+    performance = await paper_trading_service.get_performance(account_name=account_name)
+    return ml_service.build_evaluation_checklist(
+        model_detail=model_detail,
+        account_name=account_name,
+        closed_trades=performance.closed_trades,
+        profit_factor=float(performance.profit_factor),
+        max_drawdown_percent=float(performance.max_drawdown_percent),
+    )

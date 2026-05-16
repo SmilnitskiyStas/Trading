@@ -241,6 +241,11 @@ class PaperTradingService:
         realized_return_percent = Decimal("0")
         if initial_balance > 0:
             realized_return_percent = ((current_balance - initial_balance) / initial_balance) * Decimal("100")
+        current_drawdown_percent = self._current_drawdown_percent(account).quantize(DECIMAL_8, rounding=ROUND_DOWN)
+        max_drawdown_percent = self._max_drawdown_percent(
+            initial_balance=initial_balance,
+            closed_trades=closed_trades,
+        ).quantize(DECIMAL_8, rounding=ROUND_DOWN)
 
         average_win = (
             sum((Decimal(str(trade.realized_pnl)) for trade in winning_trades), start=Decimal("0"))
@@ -279,6 +284,8 @@ class PaperTradingService:
             average_win=average_win.quantize(DECIMAL_8, rounding=ROUND_DOWN),
             average_loss=average_loss.quantize(DECIMAL_8, rounding=ROUND_DOWN),
             profit_factor=profit_factor.quantize(DECIMAL_8, rounding=ROUND_DOWN),
+            current_drawdown_percent=current_drawdown_percent,
+            max_drawdown_percent=max_drawdown_percent,
         )
 
     async def get_performance_by_day(self, account_name: str) -> list[PaperTradingPerformanceByDayRead]:
@@ -468,6 +475,28 @@ class PaperTradingService:
         if current_balance >= initial_balance:
             return Decimal("0")
         return ((initial_balance - current_balance) / initial_balance) * Decimal("100")
+
+    @staticmethod
+    def _max_drawdown_percent(initial_balance: Decimal, closed_trades: list[PaperTrade]) -> Decimal:
+        if initial_balance <= 0:
+            return Decimal("0")
+        running_balance = initial_balance
+        peak_balance = initial_balance
+        max_drawdown = Decimal("0")
+
+        ordered_trades = sorted(
+            [trade for trade in closed_trades if trade.closed_at is not None],
+            key=lambda trade: trade.closed_at,
+        )
+        for trade in ordered_trades:
+            running_balance += Decimal(str(trade.realized_pnl))
+            if running_balance > peak_balance:
+                peak_balance = running_balance
+            if peak_balance > 0:
+                drawdown = ((peak_balance - running_balance) / peak_balance) * Decimal("100")
+                if drawdown > max_drawdown:
+                    max_drawdown = drawdown
+        return max_drawdown
 
     @staticmethod
     def _format_open_trade_message(symbol: str, trade: PaperTrade) -> str:

@@ -63,6 +63,8 @@ class PaperTradingPerformanceRead(BaseModel):
     average_win: Decimal
     average_loss: Decimal
     profit_factor: Decimal
+    current_drawdown_percent: Decimal
+    max_drawdown_percent: Decimal
 
 
 class PaperTradingPerformanceByDayRead(BaseModel):

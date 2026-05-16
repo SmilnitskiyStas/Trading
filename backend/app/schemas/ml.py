@@ -187,6 +187,24 @@ class MLModelDetailResponse(BaseModel):
     review_updated_at: datetime | None = None
 
 
+class MLChecklistCriterion(BaseModel):
+    name: str
+    passed: bool
+    actual: str
+    expected: str
+    details: str | None = None
+
+
+class MLEvaluationChecklistResponse(BaseModel):
+    model_id: str
+    symbol: str
+    timeframe: str
+    account_name: str
+    overall_passed: bool
+    recommendation: str
+    criteria: list[MLChecklistCriterion]
+
+
 class MLWalkForwardRequest(BaseModel):
     exchange: str = Field(default="binance")
     symbol: str = Field(default="BTC/USDT")
