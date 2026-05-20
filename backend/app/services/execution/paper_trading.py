@@ -71,12 +71,17 @@ class PaperTradingService:
             timeframe=payload.timeframe,
         )
 
+        resolved_strategy_name = self.risk_service.strategy_service.resolve_paper_strategy_name(
+            symbol=payload.symbol,
+            strategy_name=payload.strategy_name,
+        )
+
         strategy_result = await self.risk_service.strategy_service.evaluate_strategy_inputs(
             exchange=payload.exchange,
             symbol=payload.symbol,
             timeframe=payload.timeframe,
             limit=payload.limit,
-            strategy_name=payload.strategy_name,
+            strategy_name=resolved_strategy_name,
         )
         resolved_strategy_name = strategy_result.strategy_name
 

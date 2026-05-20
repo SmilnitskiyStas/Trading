@@ -128,7 +128,7 @@ class AutomationRunner:
                                     "reasons": execution_result.reasons,
                                     "strategy_name": execution_result.trade.strategy_name
                                     if execution_result.trade is not None
-                                    else strategy_service.resolve_strategy_name(
+                                    else strategy_service.resolve_paper_strategy_name(
                                         symbol=symbol,
                                         strategy_name=self.settings.strategy_default_name,
                                     ),

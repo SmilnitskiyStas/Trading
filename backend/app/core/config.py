@@ -70,9 +70,29 @@ class Settings(BaseSettings):
         default=False,
         alias="STRATEGY_RSI_EMA_MULTI_V1_REQUIRE_MACD_IMPROVING",
     )
+    strategy_rsi_ema_paper_v1_trend_period: int = Field(
+        default=50,
+        alias="STRATEGY_RSI_EMA_PAPER_V1_TREND_PERIOD",
+    )
+    strategy_rsi_ema_paper_v1_buy_rsi_max: float = Field(
+        default=52.0,
+        alias="STRATEGY_RSI_EMA_PAPER_V1_BUY_RSI_MAX",
+    )
+    strategy_rsi_ema_paper_v1_sell_rsi_min: float = Field(
+        default=55.0,
+        alias="STRATEGY_RSI_EMA_PAPER_V1_SELL_RSI_MIN",
+    )
+    strategy_rsi_ema_paper_v1_require_macd_improving: bool = Field(
+        default=False,
+        alias="STRATEGY_RSI_EMA_PAPER_V1_REQUIRE_MACD_IMPROVING",
+    )
     strategy_symbol_overrides: str = Field(
         default="BTC/USDT:rsi_ema_trend_v2,ETH/USDT:rsi_ema_trend_multi_v1",
         alias="STRATEGY_SYMBOL_OVERRIDES",
+    )
+    paper_strategy_symbol_overrides: str = Field(
+        default="BTC/USDT:rsi_ema_trend_paper_v1,ETH/USDT:rsi_ema_trend_paper_v1",
+        alias="PAPER_STRATEGY_SYMBOL_OVERRIDES",
     )
     automation_enabled: bool = Field(default=True, alias="AUTOMATION_ENABLED")
     automation_account_name: str = Field(default="paper-main", alias="AUTOMATION_ACCOUNT_NAME")
@@ -127,6 +147,20 @@ class Settings(BaseSettings):
     def strategy_symbol_override_map(self) -> dict[str, str]:
         overrides: dict[str, str] = {}
         for item in self.strategy_symbol_overrides.split(","):
+            raw_item = item.strip()
+            if not raw_item or ":" not in raw_item:
+                continue
+            symbol, strategy_name = raw_item.split(":", maxsplit=1)
+            symbol = symbol.strip()
+            strategy_name = strategy_name.strip()
+            if symbol and strategy_name:
+                overrides[symbol] = strategy_name
+        return overrides
+
+    @property
+    def paper_strategy_symbol_override_map(self) -> dict[str, str]:
+        overrides: dict[str, str] = {}
+        for item in self.paper_strategy_symbol_overrides.split(","):
             raw_item = item.strip()
             if not raw_item or ":" not in raw_item:
                 continue

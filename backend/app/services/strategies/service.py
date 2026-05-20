@@ -37,6 +37,13 @@ class StrategyService:
                 sell_rsi_min=self.settings.strategy_rsi_ema_multi_v1_sell_rsi_min,
                 require_macd_improving=self.settings.strategy_rsi_ema_multi_v1_require_macd_improving,
             ),
+            "rsi_ema_trend_paper_v1": RsiEmaTrendStrategy(
+                name="rsi_ema_trend_paper_v1",
+                trend_period=self.settings.strategy_rsi_ema_paper_v1_trend_period,
+                buy_rsi_max=self.settings.strategy_rsi_ema_paper_v1_buy_rsi_max,
+                sell_rsi_min=self.settings.strategy_rsi_ema_paper_v1_sell_rsi_min,
+                require_macd_improving=self.settings.strategy_rsi_ema_paper_v1_require_macd_improving,
+            ),
         }
 
     async def evaluate(self, payload: StrategyEvaluationRequest) -> StrategyEvaluationResponse:
@@ -98,3 +105,10 @@ class StrategyService:
         if strategy_name and strategy_name != self.settings.strategy_default_name:
             return strategy_name
         return self.settings.strategy_symbol_override_map.get(symbol, self.settings.strategy_default_name)
+
+    def resolve_paper_strategy_name(self, symbol: str, strategy_name: str | None) -> str:
+        if strategy_name and strategy_name != self.settings.strategy_default_name:
+            return strategy_name
+        if symbol in self.settings.paper_strategy_symbol_override_map:
+            return self.settings.paper_strategy_symbol_override_map[symbol]
+        return self.resolve_strategy_name(symbol=symbol, strategy_name=strategy_name)
