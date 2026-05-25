@@ -49,6 +49,28 @@ def test_sync_request_accepts_deeper_backfill_limit():
     assert payload.limit == 5000
 
 
+def test_timeframe_delta_supports_thirty_minutes():
+    delta = MarketDataService._timeframe_delta("30m")
+
+    assert delta.total_seconds() == 1800
+
+
+def test_timeframe_delta_supports_fifteen_minutes():
+    delta = MarketDataService._timeframe_delta("15m")
+
+    assert delta.total_seconds() == 900
+
+
+def test_timeframe_delta_rejects_unsupported_unit():
+    try:
+        MarketDataService._timeframe_delta("4x")
+    except HTTPException as exc:
+        assert exc.status_code == 400
+        assert "Unsupported timeframe" in exc.detail
+    else:  # pragma: no cover - defensive assertion
+        raise AssertionError("Expected HTTPException for invalid timeframe")
+
+
 def test_automation_symbol_overrides_are_parseable():
     from app.core.config import get_settings
 

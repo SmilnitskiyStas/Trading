@@ -159,18 +159,39 @@ class MarketDataService:
 
     @staticmethod
     def _timeframe_delta(timeframe: str) -> timedelta:
-        mapping = {
-            "1h": timedelta(hours=1),
-            "4h": timedelta(hours=4),
-            "1d": timedelta(days=1),
-        }
-        try:
-            return mapping[timeframe]
-        except KeyError as exc:
+        if len(timeframe) < 2:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
                 detail=f"Unsupported timeframe '{timeframe}' for MVP.",
-            ) from exc
+            )
+
+        amount_raw = timeframe[:-1]
+        unit = timeframe[-1]
+        if not amount_raw.isdigit():
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=f"Unsupported timeframe '{timeframe}' for MVP.",
+            )
+
+        amount = int(amount_raw)
+        if amount <= 0:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=f"Unsupported timeframe '{timeframe}' for MVP.",
+            )
+
+        unit_mapping = {
+            "m": timedelta(minutes=amount),
+            "h": timedelta(hours=amount),
+            "d": timedelta(days=amount),
+        }
+        if unit not in unit_mapping:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=f"Unsupported timeframe '{timeframe}' for MVP.",
+            )
+
+        return unit_mapping[unit]
 
     async def _fetch_ohlcv_window(
         self,
